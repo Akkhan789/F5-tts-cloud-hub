@@ -33,7 +33,7 @@ if submit_btn:
                 os.environ["KAGGLE_USERNAME"] = kaggle_username
                 os.environ["KAGGLE_API_TOKEN"] = kaggle_key
                 
-                # Gradio UI code blocks block logic fix
+                # Gradio UI custom layout string update
                 gradio_override_script = f"""
 import gradio as gr
 from f5_tts.api import F5TTS
@@ -41,26 +41,23 @@ import shutil
 import os
 import time
 
-# Core F5TTS initialize karna background compute engine ke liye
 f5tts = F5TTS()
 
 def process_voice_clone(text_input, reference_audio, file_title):
     if not reference_audio or not text_input:
         return None
     
-    # Custom Name Override Logic
     clean_title = "".join([c for c in file_title if c.isalpha() or c.isdigit() or c==' ']).rstrip()
     if not clean_title:
         clean_title = "cloned_voice_" + str(int(time.time()))
         
     final_output_path = f"{{clean_title}}.wav"
     
-    # F5-TTS model core engine inference run logic mapping
     f5tts.infer(
         ref_audio=reference_audio,
-        ref_text="",  # Whisper auto-transcribe karega
+        ref_text="",  
         gen_text=text_input,
-        output_file=final_output_path
+        file_wave=final_output_path
     )
     
     return final_output_path
@@ -106,17 +103,33 @@ demo.queue().launch(port=7860, host='0.0.0.0')
                             "metadata": {},
                             "outputs": [],
                             "source": [
+                                "import os\n",
+                                "import subprocess\n",
+                                "# 1. Kill any existing active ports\n",
+                                "!fuser -k 7860/tcp || true\n",
+                                "!pkill -f custom_gradio_app.py || true\n",
+                                "!pkill -f f5-tts || true\n",
                                 f"NGROK_TOKEN = '{ngrok_auth}'\n",
                                 f"NGROK_DOMAIN = '{ngrok_domain}'\n",
+                                "# 2. Core packages clean installation\n",
                                 "!pip install pyngrok f5-tts gradio\n",
                                 "from pyngrok import ngrok\n",
-                                "import subprocess\n",
                                 "import time\n",
                                 "ngrok.set_auth_token(NGROK_TOKEN)\n",
                                 f"with open('custom_gradio_app.py', 'w') as f: f.write(\"\"\"{gradio_override_script}\"\"\")\n",
-                                "# Built-in UI ke bajaye hamari apni custom layout script trigger karna\n",
+                                "# 3. HARD OVERRIDE: F5-TTS internal library CLI template file ko hamare custom code se overwrite karna\n",
+                                "try:\n",
+                                "    import f5_tts\n",
+                                "    lib_path = os.path.dirname(f5_tts.__file__)\n",
+                                "    target_cli_file = os.path.join(lib_path, 'infer', 'infer_gradio.py')\n",
+                                "    shutil.copy('custom_gradio_app.py', target_cli_file)\n",
+                                "except Exception as e: print('Override status:', str(e))\n",
+                                "# 4. Launching the customized app instance\n",
                                 "subprocess.Popen(['python', 'custom_gradio_app.py'])\n",
-                                "time.sleep(20)\n",
+                                "time.sleep(25)\n",
+                                "try:\n",
+                                "    ngrok.disconnect(ngrok.get_tunnels().public_url)\n",
+                                "except: pass\n",
                                 "public_url = ngrok.connect(7860, name='f5_node', hostname=NGROK_DOMAIN)\n",
                                 "print('Node Active:', public_url)\n",
                                 "while True: time.sleep(60)"
