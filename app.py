@@ -33,66 +33,42 @@ if submit_btn:
                 os.environ["KAGGLE_USERNAME"] = kaggle_username
                 os.environ["KAGGLE_API_TOKEN"] = kaggle_key
                 
-                # Gradio UI custom layout string update
-                gradio_override_script = f"""
+                # Dynamic Custom Wrapper UI Launcher Injection Script
+                wrapper_app_script = f"""
 import gradio as gr
-from f5_tts.api import F5TTS
-import shutil
 import os
 import time
 
-f5tts = F5TTS()
+# F5-TTS ki built-in running application interface layer fetch karna
+from f5_tts.infer.infer_gradio import app as f5_original_app
 
-def process_voice_clone(text_input, reference_audio, file_title):
-    if not reference_audio or not text_input:
-        return None
-    
-    clean_title = "".join([c for c in file_title if c.isalpha() or c.isdigit() or c==' ']).rstrip()
-    if not clean_title:
-        clean_title = "cloned_voice_" + str(int(time.time()))
-        
-    final_output_path = f"{{clean_title}}.wav"
-    
-    f5tts.infer(
-        ref_audio=reference_audio,
-        ref_text="",  
-        gen_text=text_input,
-        file_wave=final_output_path
-    )
-    
-    return final_output_path
-
-custom_css = ".gradio-container {{background-color: #f7f9fc; font-family: 'Poppins', sans-serif;}}"
+custom_css = ".gradio-container {{background-color: #111111; color: #ffffff; font-family: 'Poppins', sans-serif;}}"
 branding_html = '''
-<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-    <h1 style="margin: 0; font-size: 28px; font-weight: 700;">Welcome to Advanced F5-TTS</h1>
-    <p style="margin: 5px 0 15px 0; font-size: 16px; opacity: 0.9;">Professional Voice Cloning Portal</p>
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);">
+    <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: white;">Welcome to Advanced F5-TTS Portal</h1>
+    <p style="margin: 5px 0 15px 0; font-size: 16px; opacity: 0.9; color: #e2e8f0;">Dynamic Multi-User Infrastructure Enabled</p>
     <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.2); margin: 10px 0;">
-    <p style="margin: 5px 0; font-weight: 500; font-size: 14px;">🛠️ Build & Optimized by <b>M Yousaf</b></p>
-    <a href="https://wa.me{whatsapp_num}?text={encoded_msg}" target="_blank" style="display: inline-flex; align-items: center; background-color: #25D366; color: white; padding: 8px 16px; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-        <img src="https://wikimedia.org" style="width: 20px; margin-right: 8px;"/> Get Expert Guidance
+    <p style="margin: 5px 0; font-weight: 500; font-size: 15px; color: #f7fafc;">🛠️ Build, Designed & Optimized by <b>M Yousaf</b></p>
+    <a href="https://wa.me{whatsapp_num}?text={encoded_msg}" target="_blank" style="display: inline-flex; align-items: center; background-color: #25D366; color: white; padding: 10px 20px; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+        <img src="https://wikimedia.org" style="width: 20px; margin-right: 8px;"/> Get Professional Guide & Support
     </a>
 </div>
 '''
 
-with gr.Blocks(css=custom_css, title="F5-TTS Voice Portal") as demo:
+with gr.Blocks(css=custom_css, title="F5-TTS Voice Portal | M Yousaf") as master_demo:
+    # 1. Injecting your custom Premium Header Card
     gr.HTML(branding_html)
+    
+    # 2. Injecting custom title information field
     with gr.Row():
-        with gr.Column():
-            title_input = gr.Textbox(label="Save Audio As (Custom File Name)", placeholder="e.g., My_Project_Voice")
-            text_field = gr.Textbox(label="Text to Speech (Input text)", lines=3)
-            audio_ref = gr.Audio(label="Reference Voice Audio File Source", type="filepath")
-            generate_btn = gr.Button("🚀 Generate Clone Voice", variant="primary")
-        with gr.Column():
-            audio_output = gr.Audio(label="Download Cloned Output Track File")
-            
-    generate_btn.click(
-        fn=process_voice_clone,
-        inputs=[text_field, audio_ref, title_input],
-        outputs=audio_output
-    )
+        file_title = gr.Textbox(label="💾 Set Output Audio Download Name (Optional)", placeholder="e.g., Cloned_Speech_Yousaf_Project")
+        
+    # 3. Embedding the full default layout interface inside your wrapper
+    with gr.Row():
+        f5_original_app.render()
 
-demo.queue().launch(port=7860, host='0.0.0.0')
+# Launching Master Wrapper on Port 7860
+master_demo.queue().launch(port=7860, host='0.0.0.0')
 """
                 
                 notebook_content = {
@@ -105,33 +81,25 @@ demo.queue().launch(port=7860, host='0.0.0.0')
                             "source": [
                                 "import os\n",
                                 "import subprocess\n",
-                                "# 1. Kill any existing active ports\n",
+                                "# Background cleanup process tags\n",
                                 "!fuser -k 7860/tcp || true\n",
-                                "!pkill -f custom_gradio_app.py || true\n",
+                                "!pkill -f master_wrapper_launcher.py || true\n",
                                 "!pkill -f f5-tts || true\n",
                                 f"NGROK_TOKEN = '{ngrok_auth}'\n",
                                 f"NGROK_DOMAIN = '{ngrok_domain}'\n",
-                                "# 2. Core packages clean installation\n",
                                 "!pip install pyngrok f5-tts gradio\n",
                                 "from pyngrok import ngrok\n",
                                 "import time\n",
                                 "ngrok.set_auth_token(NGROK_TOKEN)\n",
-                                f"with open('custom_gradio_app.py', 'w') as f: f.write(\"\"\"{gradio_override_script}\"\"\")\n",
-                                "# 3. HARD OVERRIDE: F5-TTS internal library CLI template file ko hamare custom code se overwrite karna\n",
-                                "try:\n",
-                                "    import f5_tts\n",
-                                "    lib_path = os.path.dirname(f5_tts.__file__)\n",
-                                "    target_cli_file = os.path.join(lib_path, 'infer', 'infer_gradio.py')\n",
-                                "    shutil.copy('custom_gradio_app.py', target_cli_file)\n",
-                                "except Exception as e: print('Override status:', str(e))\n",
-                                "# 4. Launching the customized app instance\n",
-                                "subprocess.Popen(['python', 'custom_gradio_app.py'])\n",
+                                f"with open('master_wrapper_launcher.py', 'w') as f: f.write(\"\"\"{wrapper_app_script}\"\"\")\n",
+                                "# Parent application execution bypass trigger\n",
+                                "subprocess.Popen(['python', 'master_wrapper_launcher.py'])\n",
                                 "time.sleep(25)\n",
                                 "try:\n",
                                 "    ngrok.disconnect(ngrok.get_tunnels().public_url)\n",
                                 "except: pass\n",
                                 "public_url = ngrok.connect(7860, name='f5_node', hostname=NGROK_DOMAIN)\n",
-                                "print('Node Active:', public_url)\n",
+                                "print('Wrapper Deployment Active:', public_url)\n",
                                 "while True: time.sleep(60)"
                             ]
                         }
