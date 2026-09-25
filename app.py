@@ -27,7 +27,7 @@ if submit_btn:
             try:
                 # Kaggle credentials configure karna environment runtime ke liye
                 os.environ["KAGGLE_USERNAME"] = kaggle_username
-                os.environ["KAGGLE_KEY"] = kaggle_key
+                os.environ["KAGGLE_API_TOKEN"] = kaggle_key
                 
                 # Dynamic Notebook setup
                 notebook_content = {
