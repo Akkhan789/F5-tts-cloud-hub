@@ -20,7 +20,6 @@ with st.form("user_node_form"):
     
     submit_btn = st.form_submit_button("🚀 Deploy My Personal T4 Node")
 
-# WhatsApp auto draft message setting
 whatsapp_num = "923097647772"
 raw_msg = "Hello M Yousaf! I need guidance regarding the F5-TTS Voice Cloning setup. Kindly assist me."
 encoded_msg = urllib.parse.quote(raw_msg)
@@ -34,28 +33,38 @@ if submit_btn:
                 os.environ["KAGGLE_USERNAME"] = kaggle_username
                 os.environ["KAGGLE_API_TOKEN"] = kaggle_key
                 
-                # Dynamic Custom Gradio App Launcher Injection string
+                # Gradio UI code blocks block logic fix
                 gradio_override_script = f"""
 import gradio as gr
+from f5_tts.api import F5TTS
 import shutil
 import os
 import time
 
+# Core F5TTS initialize karna background compute engine ke liye
+f5tts = F5TTS()
+
 def process_voice_clone(text_input, reference_audio, file_title):
-    # Base F5-TTS model inference call runs here
-    # (Yeh placeholder actual core function call back represent karta hai)
-    generated_temp_file = "temp_output.wav" 
+    if not reference_audio or not text_input:
+        return None
     
     # Custom Name Override Logic
     clean_title = "".join([c for c in file_title if c.isalpha() or c.isdigit() or c==' ']).rstrip()
     if not clean_title:
-        clean_title = "cloned_voice"
+        clean_title = "cloned_voice_" + str(int(time.time()))
         
     final_output_path = f"{{clean_title}}.wav"
-    shutil.copy(generated_temp_file, final_output_path)
+    
+    # F5-TTS model core engine inference run logic mapping
+    f5tts.infer(
+        ref_audio=reference_audio,
+        ref_text="",  # Whisper auto-transcribe karega
+        gen_text=text_input,
+        output_file=final_output_path
+    )
+    
     return final_output_path
 
-# Custom Premium Styling & Contact Badge HTML
 custom_css = ".gradio-container {{background-color: #f7f9fc; font-family: 'Poppins', sans-serif;}}"
 branding_html = '''
 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
@@ -104,9 +113,10 @@ demo.queue().launch(port=7860, host='0.0.0.0')
                                 "import subprocess\n",
                                 "import time\n",
                                 "ngrok.set_auth_token(NGROK_TOKEN)\n",
-                                f"with open('custom_gradio_app.py', 'w') as f: f.write('''{gradio_override_script}''')\n",
+                                f"with open('custom_gradio_app.py', 'w') as f: f.write(\"\"\"{gradio_override_script}\"\"\")\n",
+                                "# Built-in UI ke bajaye hamari apni custom layout script trigger karna\n",
                                 "subprocess.Popen(['python', 'custom_gradio_app.py'])\n",
-                                "time.sleep(15)\n",
+                                "time.sleep(20)\n",
                                 "public_url = ngrok.connect(7860, name='f5_node', hostname=NGROK_DOMAIN)\n",
                                 "print('Node Active:', public_url)\n",
                                 "while True: time.sleep(60)"
