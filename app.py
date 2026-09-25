@@ -113,8 +113,8 @@ master_demo.queue().launch(port=7860, host='0.0.0.0')
                     json.dump(notebook_content, f)
                     
                 metadata = {
-                    "id": f"{kaggle_username}/f5-tts-worker-node",
-                    "title": "F5 TTS Worker Node",
+                    "id": f"{kaggle_username}/f5-tts-custom-node-v2",
+                    "title": "F5 TTS Custom Node V2",
                     "code_file": "active_worker.ipynb",
                     "language": "python",
                     "kernel_type": "notebook",
