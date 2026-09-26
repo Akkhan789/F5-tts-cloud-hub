@@ -99,8 +99,8 @@ if not ready:
 # Now ngrok
 from pyngrok import ngrok
 
-NGROK_TOKEN = "YOUR_TOKEN"
-NGROK_DOMAIN = "YOUR_DOMAIN"
+NGROK_TOKEN = "3JpXWi9Hmg6rAFc1ZTGBEPTkdir_69NkqGvtA1eZ4HHVCrbZT"
+NGROK_DOMAIN = "alike-dab-geologic.ngrok-free.dev"
 
 ngrok.set_auth_token(NGROK_TOKEN)
 
