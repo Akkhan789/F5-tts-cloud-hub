@@ -13,11 +13,11 @@ with st.form("user_node_form"):
     st.subheader("1. Kaggle Authentication")
     kaggle_username = st.text_input("Kaggle Username", placeholder="e.g., ahmadkhan")
     kaggle_key = st.text_input("Kaggle API Key", type="password", placeholder="e.g., 8f3c7ea...")
-    
+
     st.subheader("2. Ngrok Multi-Tunnel Setup")
     ngrok_auth = st.text_input("Ngrok Auth Token", type="password", placeholder="e.g., 2Xf...")
     ngrok_domain = st.text_input("Ngrok Static Domain (Unique per user)", placeholder="e.g., your-unique-id.ngrok-free.app")
-    
+
     submit_btn = st.form_submit_button("🚀 Deploy My Personal T4 Node")
 
 whatsapp_num = "923097647772"
@@ -32,7 +32,7 @@ if submit_btn:
             try:
                 os.environ["KAGGLE_USERNAME"] = kaggle_username
                 os.environ["KAGGLE_API_TOKEN"] = kaggle_key
-                
+
                 # Dynamic Custom Wrapper UI Launcher Injection Script
                 wrapper_app_script = f"""
 import gradio as gr
@@ -58,19 +58,19 @@ branding_html = '''
 with gr.Blocks(css=custom_css, title="F5-TTS Voice Portal | M Yousaf") as master_demo:
     # 1. Injecting your custom Premium Header Card
     gr.HTML(branding_html)
-    
+
     # 2. Injecting custom title information field
     with gr.Row():
         file_title = gr.Textbox(label="💾 Set Output Audio Download Name (Optional)", placeholder="e.g., Cloned_Speech_Yousaf_Project")
-        
+
     # 3. Embedding the full default layout interface inside your wrapper
     with gr.Row():
-        f5_original_app.render()
+        rendered_f5_app = f5_original_app.render()
 
 # Launching Master Wrapper on Port 7860
 master_demo.queue().launch(port=7860, host='0.0.0.0')
 """
-                
+
                 notebook_content = {
                     "cells": [
                         {
@@ -91,9 +91,9 @@ master_demo.queue().launch(port=7860, host='0.0.0.0')
                                 "from pyngrok import ngrok\n",
                                 "import time\n",
                                 "ngrok.set_auth_token(NGROK_TOKEN)\n",
-                                f"with open('master_wrapper_launcher.py', 'w') as f: f.write(\"\"\"{wrapper_app_script}\"\"\")\n",
+                                f'with open("master_wrapper_launcher.py", "w") as f: f.write("""{wrapper_app_script}""")\n',
                                 "# Parent application execution bypass trigger\n",
-                                "subprocess.Popen(['python', 'master_wrapper_launcher.py'])\n",
+                                'subprocess.run("nohup python master_wrapper_launcher.py > launcher.log 2>&1 &\\n", shell=True, executable="/bin/bash")\n',
                                 "time.sleep(25)\n",
                                 "try:\n",
                                 "    ngrok.disconnect(ngrok.get_tunnels().public_url)\n",
@@ -108,10 +108,10 @@ master_demo.queue().launch(port=7860, host='0.0.0.0')
                     "nbformat": 4,
                     "nbformat_minor": 4
                 }
-                
+
                 with open("active_worker.ipynb", "w") as f:
                     json.dump(notebook_content, f)
-                    
+
                 metadata = {
                     "id": f"{kaggle_username}/f5-tts-custom-node-v2",
                     "title": "F5 TTS Custom Node V2",
@@ -124,14 +124,14 @@ master_demo.queue().launch(port=7860, host='0.0.0.0')
                 }
                 with open("kernel-metadata.json", "w") as f:
                     json.dump(metadata, f)
-                
+
                 result = subprocess.run(["kaggle", "kernels", "push", "-p", "."], capture_output=True, text=True)
-                
+
                 if "successfully" in result.stdout.lower() or result.returncode == 0:
                     st.success(f"🎉 Aapka personal T4 Node background mein start ho chuka hai!")
                     st.markdown(f"### 🔗 [Click Here To Open Your F5-TTS Web UI](https://{ngrok_domain})")
                 else:
                     st.error(f"Kaggle CLI Error: {result.stderr if result.stderr else result.stdout}")
-                    
+
             except Exception as e:
                 st.error(f"System Error: {str(e)}")
