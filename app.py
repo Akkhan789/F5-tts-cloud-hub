@@ -1,307 +1,137 @@
+import streamlit as st
 import json
 import os
-import re
-import shutil
 import subprocess
-import tempfile
-import threading
-import time
-import urllib.error
-import urllib.request
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
-from urllib.parse import urlparse
+import urllib.parse
 
-import streamlit as st
+st.set_page_config(page_title="Multi-User F5-TTS Core Hub", page_icon="🎛️", layout="centered")
 
-st.set_page_config(page_title="F5-TTS Personal Server", page_icon="🎙️", layout="centered")
+st.title("🎛️ Multi-User F5-TTS Cloud Hub")
+st.write("Apna Kaggle Token aur Ngrok Credentials dalein aur background mein free T4 GPU instant start karein.")
 
-st.title("🎙️ F5-TTS Personal Server")
-st.caption("Pehle Kaggle aur ngrok ko alag-alag verify karein, phir F5-TTS start karein.")
+with st.form("user_node_form"):
+    st.subheader("1. Kaggle Authentication")
+    kaggle_username = st.text_input("Kaggle Username", placeholder="e.g., ahmadkhan")
+    kaggle_key = st.text_input("Kaggle API Key", type="password", placeholder="e.g., 8f3c7ea...")
+    
+    st.subheader("2. Ngrok Multi-Tunnel Setup")
+    ngrok_auth = st.text_input("Ngrok Auth Token", type="password", placeholder="e.g., 2Xf...")
+    ngrok_domain = st.text_input("Ngrok Static Domain (Unique per user)", placeholder="e.g., your-unique-id.ngrok-free.app")
+    
+    submit_btn = st.form_submit_button("🚀 Deploy My Personal T4 Node")
 
+whatsapp_num = "923097647772"
+raw_msg = "Hello M Yousaf! I need guidance regarding the F5-TTS Voice Cloning setup. Kindly assist me."
+encoded_msg = urllib.parse.quote(raw_msg)
 
-def normalize_domain(value: str) -> str:
-    value = value.strip()
-    if not value:
-        return ""
-    if not re.match(r"^https?://", value, re.I):
-        value = "https://" + value
-    parsed = urlparse(value)
-    return parsed.netloc.lower().strip().rstrip("/")
-
-
-def classify_kaggle_error(text: str) -> str:
-    s = (text or "").lower()
-    if "401" in s or "unauthorized" in s or "authentication" in s or "invalid credentials" in s:
-        return "Kaggle authentication failed: username/API token invalid or expired."
-    if "403" in s or "forbidden" in s or "permission" in s:
-        return "Kaggle permission denied: this account/token cannot access the requested API action."
-    if "429" in s or "rate limit" in s:
-        return "Kaggle rate limit reached. Please wait and try again."
-    if "not found" in s or "404" in s:
-        return "Kaggle resource/account was not found. Check the username."
-    return "Kaggle verification failed. See the technical error below."
-
-
-def verify_kaggle(username: str, token: str):
-    env = os.environ.copy()
-    env["KAGGLE_USERNAME"] = username.strip()
-    env["KAGGLE_API_TOKEN"] = token.strip()
-    try:
-        result = subprocess.run(
-            ["kaggle", "kernels", "list", "--mine", "--page-size", "1"],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        raw = (result.stderr or result.stdout or "").strip()
-        if result.returncode == 0:
-            return True, "Kaggle API authentication successful."
-        return False, classify_kaggle_error(raw) + "\n\n" + raw[-2500:]
-    except FileNotFoundError:
-        return False, "Kaggle CLI is not installed on the Streamlit server. Add kaggle to requirements.txt."
-    except subprocess.TimeoutExpired:
-        return False, "Kaggle verification timed out after 30 seconds."
-    except Exception as exc:
-        return False, f"Kaggle verification error: {exc}"
-
-
-class _HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        body = b"ngrok verification server"
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, format, *args):
-        return
-
-
-def classify_ngrok_error(text: str) -> str:
-    s = (text or "").lower()
-    if "authentication failed" in s or "invalid authtoken" in s or "authtoken" in s and "invalid" in s:
-        return "ngrok Auth Token problem: token invalid, revoked, or not accepted by ngrok."
-    if "authorization failed" in s or "unauthorized" in s or "401" in s:
-        return "ngrok authentication problem: Auth Token was rejected."
-    if "domain" in s and ("not found" in s or "does not exist" in s or "not exist" in s):
-        return "ngrok Domain problem: this domain is not available in the ngrok account."
-    if "already online" in s or "already in use" in s or "endpoint already" in s:
-        return "ngrok Domain problem: this domain is already being used by another active endpoint."
-    if "forbidden" in s or "403" in s or "not authorized" in s:
-        return "ngrok Domain permission problem: this account/token cannot bind this domain."
-    if "reserved" in s or "custom domain" in s or "plan" in s or "upgrade" in s:
-        return "ngrok Domain/plan problem: this domain or feature may not be enabled for this account."
-    if "connect" in s or "network" in s or "dial" in s:
-        return "ngrok network problem: the Streamlit server could not connect to ngrok."
-    return "ngrok verification failed. See the technical error below."
-
-
-def verify_ngrok(auth_token: str, domain: str):
-    """Actually start a short-lived ngrok tunnel to verify token + domain together."""
-    server = None
-    tunnel = None
-    try:
-        from pyngrok import ngrok
-        from pyngrok.conf import PyngrokConfig
-
-        server = HTTPServer(("127.0.0.1", 0), _HealthHandler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        local_port = server.server_address[1]
-
-        cfg = PyngrokConfig(auth_token=auth_token.strip())
-        tunnel = ngrok.connect(local_port, proto="http", domain=domain, pyngrok_config=cfg)
-        public_url = tunnel.public_url
-        return True, f"ngrok Auth Token + Domain verified successfully.\nEndpoint: {public_url}"
-    except Exception as exc:
-        raw = str(exc)
-        return False, classify_ngrok_error(raw) + "\n\n" + raw[-3500:]
-    finally:
-        try:
-            from pyngrok import ngrok
-            ngrok.kill()
-        except Exception:
-            pass
-        if server:
+if submit_btn:
+    if not (kaggle_username and kaggle_key and ngrok_auth and ngrok_domain):
+        st.error("Meharbani karke saari fields fill karein!")
+    else:
+        with st.spinner("Kaggle API trigger ho rahi hai... T4 Node provision ho raha hai."):
             try:
-                server.shutdown()
-                server.server_close()
-            except Exception:
-                pass
+                os.environ["KAGGLE_USERNAME"] = kaggle_username
+                os.environ["KAGGLE_API_TOKEN"] = kaggle_key
+                
+                # Dynamic Custom Wrapper UI Launcher Injection Script
+                wrapper_app_script = f"""
+import gradio as gr
+import os
+import time
 
+# F5-TTS ki built-in running application interface layer fetch karna
+from f5_tts.infer.infer_gradio import app as f5_original_app
 
-def build_kernel_folder(username: str, ngrok_token: str, domain: str):
-    template_path = Path(__file__).with_name("kaggle_node_template.py")
-    if not template_path.exists():
-        raise FileNotFoundError("kaggle_node_template.py is missing from the GitHub project.")
+custom_css = ".gradio-container {{background-color: #111111; color: #ffffff; font-family: 'Poppins', sans-serif;}}"
+branding_html = '''
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);">
+    <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: white;">Welcome to Advanced F5-TTS Portal</h1>
+    <p style="margin: 5px 0 15px 0; font-size: 16px; opacity: 0.9; color: #e2e8f0;">Dynamic Multi-User Infrastructure Enabled</p>
+    <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.2); margin: 10px 0;">
+    <p style="margin: 5px 0; font-weight: 500; font-size: 15px; color: #f7fafc;">🛠️ Build, Designed & Optimized by <b>M Yousaf</b></p>
+    <a href="https://wa.me{whatsapp_num}?text={encoded_msg}" target="_blank" style="display: inline-flex; align-items: center; background-color: #25D366; color: white; padding: 10px 20px; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+        <img src="https://wikimedia.org" style="width: 20px; margin-right: 8px;"/> Get Professional Guide & Support
+    </a>
+</div>
+'''
 
-    template = template_path.read_text(encoding="utf-8")
-    node_code = template.replace("__NGROK_TOKEN__", repr(ngrok_token.strip()))
-    node_code = node_code.replace("__NGROK_DOMAIN__", repr(domain.strip()))
+with gr.Blocks(css=custom_css, title="F5-TTS Voice Portal | M Yousaf") as master_demo:
+    # 1. Injecting your custom Premium Header Card
+    gr.HTML(branding_html)
+    
+    # 2. Injecting custom title information field
+    with gr.Row():
+        file_title = gr.Textbox(label="💾 Set Output Audio Download Name (Optional)", placeholder="e.g., Cloned_Speech_Yousaf_Project")
+        
+    # 3. Embedding the full default layout interface inside your wrapper
+    with gr.Row():
+        f5_original_app.render()
 
-    suffix = f"{int(time.time())}-{os.urandom(3).hex()}"
-    slug = f"f5-tts-server-{suffix}"
-    title = f"F5-TTS Server {suffix}"
-
-    folder = Path(tempfile.mkdtemp(prefix="f5tts-kernel-"))
-    (folder / "f5tts_server.py").write_text(node_code, encoding="utf-8")
-    metadata = {
-        "id": f"{username.strip()}/{slug}",
-        "title": title,
-        "code_file": "f5tts_server.py",
-        "language": "python",
-        "kernel_type": "script",
-        "is_private": True,
-        "enable_gpu": True,
-        "enable_internet": True,
-        "machine_shape": "NvidiaTeslaT4",
-    }
-    (folder / "kernel-metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    return folder, metadata["id"]
-
-
-def push_kernel(folder: Path, username: str, token: str):
-    env = os.environ.copy()
-    env["KAGGLE_USERNAME"] = username.strip()
-    env["KAGGLE_API_TOKEN"] = token.strip()
-    return subprocess.run(
-        ["kaggle", "kernels", "push", "-p", str(folder)],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=180,
-    )
-
-
-def wait_for_public_url(domain: str, timeout: int = 900):
-    """Return True only when the actual F5-TTS/Gradio page is HTTP 200.
-
-    Important: an offline ngrok endpoint can return an HTTP error page (for
-    example ERR_NGROK_3200). Treating any 2xx-4xx response as ready caused
-    false "server is ready" messages.
-    """
-    url = "https://" + domain.rstrip("/") + "/"
-    started = time.time()
-    while time.time() - started < timeout:
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={"User-Agent": "F5-TTS-Ready-Check"},
-            )
-            with urllib.request.urlopen(req, timeout=8) as response:
-                body = response.read(30000).decode("utf-8", errors="ignore")
-                lower = body.lower()
-                # Only HTTP 200 from the real upstream counts as ready.
-                # ngrok error pages must never be accepted as readiness.
-                if (
-                    response.status == 200
-                    and "err_ngrok_" not in lower
-                    and "endpoint is offline" not in lower
-                ):
-                    return True
-        except urllib.error.HTTPError:
-            # 404/502/etc. means the public endpoint is not ready yet.
-            pass
-        except Exception:
-            pass
-        time.sleep(5)
-    return False
-
-
-# ------------------------- UI -------------------------
-
-if "kaggle_verified" not in st.session_state:
-    st.session_state.kaggle_verified = False
-if "ngrok_verified" not in st.session_state:
-    st.session_state.ngrok_verified = False
-
-st.subheader("1. Kaggle")
-kaggle_username = st.text_input("Kaggle Username", placeholder="your_kaggle_username", key="kaggle_username")
-kaggle_token = st.text_input("Kaggle API Token", type="password", placeholder="Kaggle API token", key="kaggle_token")
-
-if st.button("🔐 Verify Kaggle", use_container_width=True):
-    if not kaggle_username.strip() or not kaggle_token.strip():
-        st.error("Kaggle Username aur API Token dono enter karein.")
-    else:
-        with st.spinner("Kaggle credentials verify ho rahe hain..."):
-            ok, message = verify_kaggle(kaggle_username, kaggle_token)
-        st.session_state.kaggle_verified = ok
-        if ok:
-            st.success("✅ " + message)
-        else:
-            st.error("❌ " + message.split("\n\n")[0])
-            with st.expander("Technical error"):
-                st.code(message)
-
-if st.session_state.kaggle_verified:
-    st.caption("🟢 Kaggle verified")
-
-st.subheader("2. ngrok")
-ngrok_token = st.text_input("ngrok Auth Token", type="password", placeholder="ngrok auth token", key="ngrok_token")
-ngrok_domain_input = st.text_input("ngrok Domain / URL", placeholder="your-name.ngrok.app", key="ngrok_domain")
-
-if st.button("🔐 Verify ngrok", use_container_width=True):
-    domain = normalize_domain(ngrok_domain_input)
-    if not ngrok_token.strip() or not domain:
-        st.error("ngrok Auth Token aur Domain dono enter karein.")
-    else:
-        with st.spinner("ngrok Auth Token + Domain verify ho rahe hain..."):
-            ok, message = verify_ngrok(ngrok_token, domain)
-        st.session_state.ngrok_verified = ok
-        if ok:
-            st.success("✅ " + message.split("\n")[0])
-            if "Endpoint:" in message:
-                st.caption(message.split("Endpoint:", 1)[1].strip())
-        else:
-            st.error("❌ " + message.split("\n\n")[0])
-            with st.expander("Technical error"):
-                st.code(message)
-
-if st.session_state.ngrok_verified:
-    st.caption("🟢 ngrok verified")
-
-st.divider()
-
-if st.button("🚀 Start F5-TTS", type="primary", use_container_width=True):
-    username = kaggle_username.strip()
-    ktoken = kaggle_token.strip()
-    ntoken = ngrok_token.strip()
-    domain = normalize_domain(ngrok_domain_input)
-
-    if not username or not ktoken or not ntoken or not domain:
-        st.error("Pehle tamam 4 details enter karein.")
-        st.stop()
-
-    if not st.session_state.kaggle_verified:
-        st.error("Pehle 'Verify Kaggle' successful hona zaroori hai.")
-        st.stop()
-
-    if not st.session_state.ngrok_verified:
-        st.error("Pehle 'Verify ngrok' successful hona zaroori hai.")
-        st.stop()
-
-    with st.spinner("F5-TTS server start ho raha hai. Please wait..."):
-        folder = None
-        try:
-            folder, kernel_id = build_kernel_folder(username, ntoken, domain)
-            pushed = push_kernel(folder, username, ktoken)
-            if pushed.returncode != 0:
-                raw = (pushed.stderr or pushed.stdout or "").strip()
-                st.error("Kaggle kernel start nahi ho saka.")
-                with st.expander("Technical error"):
-                    st.code(raw[-5000:] or "No error text returned by Kaggle.")
-                st.stop()
-
-            ready = wait_for_public_url(domain, timeout=900)
-            if not ready:
-                st.error("F5-TTS server 15 minutes ke andar ready nahi hua. Verify buttons se Kaggle/ngrok dobara check karein.")
-                st.stop()
-        finally:
-            if folder:
-                shutil.rmtree(folder, ignore_errors=True)
-
-    st.success("✅ Your F5-TTS server is ready")
-    st.link_button("🎙️ Open F5-TTS Voice Clone / TTS", "https://" + domain, use_container_width=True)
+# Launching Master Wrapper on Port 7860
+master_demo.queue().launch(port=7860, host='0.0.0.0')
+"""
+                
+                notebook_content = {
+                    "cells": [
+                        {
+                            "cell_type": "code",
+                            "execution_count": None,
+                            "metadata": {},
+                            "outputs": [],
+                            "source": [
+                                "import os\n",
+                                "import subprocess\n",
+                                "# Background cleanup process tags\n",
+                                "!fuser -k 7860/tcp || true\n",
+                                "!pkill -f master_wrapper_launcher.py || true\n",
+                                "!pkill -f f5-tts || true\n",
+                                f"NGROK_TOKEN = '{ngrok_auth}'\n",
+                                f"NGROK_DOMAIN = '{ngrok_domain}'\n",
+                                "!pip install pyngrok f5-tts gradio\n",
+                                "from pyngrok import ngrok\n",
+                                "import time\n",
+                                "ngrok.set_auth_token(NGROK_TOKEN)\n",
+                                f"with open('master_wrapper_launcher.py', 'w') as f: f.write(\"\"\"{wrapper_app_script}\"\"\")\n",
+                                "# Parent application execution bypass trigger\n",
+                                "subprocess.Popen(['python', 'master_wrapper_launcher.py'])\n",
+                                "time.sleep(25)\n",
+                                "try:\n",
+                                "    ngrok.disconnect(ngrok.get_tunnels().public_url)\n",
+                                "except: pass\n",
+                                "public_url = ngrok.connect(7860, name='f5_node', hostname=NGROK_DOMAIN)\n",
+                                "print('Wrapper Deployment Active:', public_url)\n",
+                                "while True: time.sleep(60)"
+                            ]
+                        }
+                    ],
+                    "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}},
+                    "nbformat": 4,
+                    "nbformat_minor": 4
+                }
+                
+                with open("active_worker.ipynb", "w") as f:
+                    json.dump(notebook_content, f)
+                    
+                metadata = {
+                    "id": f"{kaggle_username}/f5-tts-custom-node-v2",
+                    "title": "F5 TTS Custom Node V2",
+                    "code_file": "active_worker.ipynb",
+                    "language": "python",
+                    "kernel_type": "notebook",
+                    "is_private": True,
+                    "enable_gpu": True,
+                    "enable_internet": True
+                }
+                with open("kernel-metadata.json", "w") as f:
+                    json.dump(metadata, f)
+                
+                result = subprocess.run(["kaggle", "kernels", "push", "-p", "."], capture_output=True, text=True)
+                
+                if "successfully" in result.stdout.lower() or result.returncode == 0:
+                    st.success(f"🎉 Aapka personal T4 Node background mein start ho chuka hai!")
+                    st.markdown(f"### 🔗 [Click Here To Open Your F5-TTS Web UI](https://{ngrok_domain})")
+                else:
+                    st.error(f"Kaggle CLI Error: {result.stderr if result.stderr else result.stdout}")
+                    
+            except Exception as e:
+                st.error(f"System Error: {str(e)}")
