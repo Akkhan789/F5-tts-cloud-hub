@@ -177,22 +177,34 @@ def push_kernel(folder: Path, username: str, token: str):
 
 
 def wait_for_public_url(domain: str, timeout: int = 900):
+    """Return True only when the actual F5-TTS/Gradio page is HTTP 200.
+
+    Important: an offline ngrok endpoint can return an HTTP error page (for
+    example ERR_NGROK_3200). Treating any 2xx-4xx response as ready caused
+    false "server is ready" messages.
+    """
     url = "https://" + domain.rstrip("/") + "/"
     started = time.time()
     while time.time() - started < timeout:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "F5-TTS-Ready-Check"})
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "F5-TTS-Ready-Check"},
+            )
             with urllib.request.urlopen(req, timeout=8) as response:
-                body = response.read(10000).decode("utf-8", errors="ignore")
-                if 200 <= response.status < 500 and "ERR_NGROK_8012" not in body:
+                body = response.read(30000).decode("utf-8", errors="ignore")
+                lower = body.lower()
+                # Only HTTP 200 from the real upstream counts as ready.
+                # ngrok error pages must never be accepted as readiness.
+                if (
+                    response.status == 200
+                    and "err_ngrok_" not in lower
+                    and "endpoint is offline" not in lower
+                ):
                     return True
-        except urllib.error.HTTPError as exc:
-            try:
-                body = exc.read(10000).decode("utf-8", errors="ignore")
-            except Exception:
-                body = ""
-            if exc.code != 502 and "ERR_NGROK_8012" not in body and 200 <= exc.code < 500:
-                return True
+        except urllib.error.HTTPError:
+            # 404/502/etc. means the public endpoint is not ready yet.
+            pass
         except Exception:
             pass
         time.sleep(5)
