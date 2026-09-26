@@ -65,7 +65,7 @@ with gr.Blocks(css=custom_css, title="F5-TTS Voice Portal | M Yousaf") as master
 
     # 3. Embedding the full default layout interface inside your wrapper
     with gr.Row():
-        rendered_f5_app = f5_original_app.render()
+        f5_original_app.render()
 
 # Launching Master Wrapper on Port 7860
 master_demo.queue().launch(port=7860, host='0.0.0.0')
@@ -87,14 +87,16 @@ master_demo.queue().launch(port=7860, host='0.0.0.0')
                                 "!pkill -f f5-tts || true\n",
                                 f"NGROK_TOKEN = '{ngrok_auth}'\n",
                                 f"NGROK_DOMAIN = '{ngrok_domain}'\n",
+                                "# 1. Install required libraries\n",
                                 "!pip install pyngrok f5-tts gradio\n",
                                 "from pyngrok import ngrok\n",
                                 "import time\n",
                                 "ngrok.set_auth_token(NGROK_TOKEN)\n",
-                                f'with open("master_wrapper_launcher.py", "w") as f: f.write("""{wrapper_app_script}""")\n',
-                                "# Parent application execution bypass trigger\n",
-                                'subprocess.run("nohup python master_wrapper_launcher.py > launcher.log 2>&1 &\\n", shell=True, executable="/bin/bash")\n',
-                                "time.sleep(25)\n",
+                                f'with open("master_wrapper_launcher.py", "w") as f: f.write(\"\"\"{wrapper_app_script}\"\"\")\n',
+                                "# 2. Operational background process execution via Popen\n",
+                                "subprocess.Popen(['python', 'master_wrapper_launcher.py'])\n",
+                                "# 3. Give full 90 seconds for F5-TTS core initialization and library setups\n",
+                                "time.sleep(90)\n",
                                 "try:\n",
                                 "    ngrok.disconnect(ngrok.get_tunnels().public_url)\n",
                                 "except: pass\n",
@@ -130,6 +132,7 @@ master_demo.queue().launch(port=7860, host='0.0.0.0')
                 if "successfully" in result.stdout.lower() or result.returncode == 0:
                     st.success(f"🎉 Aapka personal T4 Node background mein start ho chuka hai!")
                     st.markdown(f"### 🔗 [Click Here To Open Your F5-TTS Web UI](https://{ngrok_domain})")
+                    st.write("⚠️ *Meharbani karke link par click karne ke baad poora 1 se 1.5 minute ka sabar rakhein taaki background mein f5-tts full install ho sake, warna ngrok connection refused error dega!*")
                 else:
                     st.error(f"Kaggle CLI Error: {result.stderr if result.stderr else result.stdout}")
 
