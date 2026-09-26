@@ -1,3 +1,2 @@
-streamlit
-kaggle
-pyngrok
+streamlit>=1.39
+kaggle>=2.0.0
