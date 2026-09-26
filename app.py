@@ -53,6 +53,59 @@ raw_msg = (
 encoded_msg = urllib.parse.quote(raw_msg)
 
 
+def verify_kaggle_api(username: str, api_token: str):
+    """Run a real authenticated Kaggle API request and report timing/errors."""
+    username = username.strip()
+    api_token = api_token.strip()
+    if not username or not api_token:
+        return False, 0.0, None, "Username aur API token dono required hain."
+    env = os.environ.copy()
+    env["KAGGLE_USERNAME"] = username
+    env["KAGGLE_API_TOKEN"] = api_token
+    started = time.monotonic()
+    try:
+        result = subprocess.run(
+            ["kaggle", "kernels", "list", "--mine", "--page-size", "1"],
+            env=env, capture_output=True, text=True, timeout=20,
+        )
+        elapsed = time.monotonic() - started
+        stdout = (result.stdout or "").strip()
+        stderr = (result.stderr or "").strip()
+        detail = stdout if stdout else stderr
+        if result.returncode == 0:
+            return True, elapsed, result.returncode, detail or "Authenticated Kaggle API request succeeded."
+        return False, elapsed, result.returncode, detail or "Kaggle CLI returned a non-zero exit code."
+    except subprocess.TimeoutExpired:
+        return False, time.monotonic() - started, None, "Kaggle API request timed out after 20 seconds."
+    except FileNotFoundError:
+        return False, time.monotonic() - started, None, "Kaggle CLI not found in this Streamlit environment."
+    except Exception as exc:
+        return False, time.monotonic() - started, None, "Unexpected Kaggle API verification error: " + repr(exc)
+
+
+st.subheader("🔐 Kaggle API Verification")
+st.caption(
+    "Deploy se pehle Verify dabayein. Ye real authenticated Kaggle API call karega; "
+    "sirf field validation nahi hogi. Token kabhi screen par print nahi hoga."
+)
+verify_btn = st.button("✅ Verify Kaggle API", use_container_width=True)
+if verify_btn:
+    if not kaggle_username.strip() or not kaggle_key.strip():
+        st.error("❌ Pehle Kaggle Username aur API Token fill karein.")
+    else:
+        with st.spinner("Kaggle API ko real request se verify kiya ja raha hai..."):
+            ok, elapsed, returncode, detail = verify_kaggle_api(kaggle_username, kaggle_key)
+        if ok:
+            st.success(f"🟢 Kaggle API VERIFIED — request successful ({elapsed:.2f}s).")
+            st.caption("Credentials ke saath authenticated Kaggle API request complete ho gayi.")
+        else:
+            st.error(f"🔴 Kaggle API verification FAILED ({elapsed:.2f}s).")
+            st.code(f"Return code: {returncode}\nDetails:\n{detail}")
+            st.warning(
+                "Agar yahan timeout, 401/403, authentication ya network error aaye, "
+                "to pehle API credentials/network issue solve karein."
+            )
+
 def kaggle_status(kernel_id: str):
     """Return Kaggle CLI status output and a normalized state."""
     try:
@@ -131,23 +184,39 @@ if submit_btn:
     ):
         st.error("Meharbani karke saari fields fill karein!")
     else:
-        with st.spinner(
-            "Kaggle node deploy ho raha hai. F5-TTS install aur startup "
-            "complete hone ke baad hi service expose hogi..."
-        ):
-            try:
-                os.environ["KAGGLE_USERNAME"] = kaggle_username.strip()
-                os.environ["KAGGLE_API_TOKEN"] = kaggle_key.strip()
+        with st.spinner("Pehle Kaggle API credentials verify kiye ja rahe hain..."):
+            api_ok, api_elapsed, api_returncode, api_detail = verify_kaggle_api(
+                kaggle_username, kaggle_key
+            )
 
-                # =========================================================
-                # F5-TTS WRAPPER
-                # =========================================================
-                # IMPORTANT:
-                # No separate F5-TTS import test is performed here.
-                # The wrapper itself performs the one real import/startup.
-                # This removes the old double-import/model-load problem.
-                # =========================================================
-                wrapper_app_script = r'''
+        if not api_ok:
+            st.error(
+                f"❌ Deploy rok diya gaya: Kaggle API verification failed "
+                f"({api_elapsed:.2f}s)."
+            )
+            st.code(f"Return code: {api_returncode}\nDetails:\n{api_detail}")
+            st.warning("Pehle 'Verify Kaggle API' pass karein. Deployment start nahi kiya gaya.")
+        else:
+            st.success(
+                f"🟢 Kaggle API pre-check passed ({api_elapsed:.2f}s). Deployment start ho raha hai..."
+            )
+            with st.spinner(
+                "Kaggle node deploy ho raha hai. F5-TTS install aur startup "
+                "complete hone ke baad hi service expose hogi..."
+            ):
+                try:
+                    os.environ["KAGGLE_USERNAME"] = kaggle_username.strip()
+                    os.environ["KAGGLE_API_TOKEN"] = kaggle_key.strip()
+
+                    # =========================================================
+                    # F5-TTS WRAPPER
+                    # =========================================================
+                    # IMPORTANT:
+                    # No separate F5-TTS import test is performed here.
+                    # The wrapper itself performs the one real import/startup.
+                    # This removes the old double-import/model-load problem.
+                    # =========================================================
+                    wrapper_app_script = r'''
 import traceback
 
 print("=" * 80)
@@ -240,12 +309,12 @@ master_demo.queue().launch(
     server_port=7860,
     show_error=True,
 )
-'''
+    '''
 
-                # =========================================================
-                # KAGGLE NOTEBOOK
-                # =========================================================
-                notebook_source = r'''
+                    # =========================================================
+                    # KAGGLE NOTEBOOK
+                    # =========================================================
+                    notebook_source = r'''
 import os
 import sys
 import time
@@ -502,105 +571,105 @@ print("=" * 80)
 
 while True:
     time.sleep(60)
-'''
+    '''
 
-                notebook_source = (
-                    notebook_source
-                    .replace("__NGROK_TOKEN__", repr(ngrok_auth.strip()))
-                    .replace("__NGROK_DOMAIN__", repr(ngrok_domain.strip()))
-                    .replace("__WRAPPER_CODE__", repr(wrapper_app_script))
-                )
-
-                notebook_content = {
-                    "cells": [
-                        {
-                            "cell_type": "code",
-                            "execution_count": None,
-                            "metadata": {},
-                            "outputs": [],
-                            "source": [
-                                line + "\n"
-                                for line in notebook_source.splitlines()
-                            ],
-                        }
-                    ],
-                    "metadata": {
-                        "kernelspec": {
-                            "display_name": "Python 3",
-                            "language": "python",
-                            "name": "python3",
-                        }
-                    },
-                    "nbformat": 4,
-                    "nbformat_minor": 4,
-                }
-
-                with open(
-                    "active_worker.ipynb",
-                    "w",
-                    encoding="utf-8",
-                ) as f:
-                    json.dump(notebook_content, f, indent=2)
-
-                metadata = {
-                    "id": (
-                        f"{kaggle_username.strip()}/"
-                        "f5-tts-custom-node-v2"
-                    ),
-                    "title": "F5 TTS Custom Node V2",
-                    "code_file": "active_worker.ipynb",
-                    "language": "python",
-                    "kernel_type": "notebook",
-                    "is_private": True,
-                    "enable_gpu": True,
-                    "enable_internet": True,
-                }
-
-                with open(
-                    "kernel-metadata.json",
-                    "w",
-                    encoding="utf-8",
-                ) as f:
-                    json.dump(metadata, f, indent=2)
-
-                result = subprocess.run(
-                    ["kaggle", "kernels", "push", "-p", "."],
-                    capture_output=True,
-                    text=True,
-                )
-
-                if result.returncode != 0:
-                    st.error(
-                        "Kaggle deployment failed:\n\n"
-                        + (
-                            result.stderr
-                            if result.stderr
-                            else result.stdout
-                        )
+                    notebook_source = (
+                        notebook_source
+                        .replace("__NGROK_TOKEN__", repr(ngrok_auth.strip()))
+                        .replace("__NGROK_DOMAIN__", repr(ngrok_domain.strip()))
+                        .replace("__WRAPPER_CODE__", repr(wrapper_app_script))
                     )
-                else:
-                    kernel_id = (
-                        kaggle_username.strip()
-                        + "/f5-tts-custom-node-v2"
-                    )
-                    domain = ngrok_domain.strip()
 
-                    st.session_state["deployment"] = {
-                        "kernel_id": kernel_id,
-                        "domain": domain,
+                    notebook_content = {
+                        "cells": [
+                            {
+                                "cell_type": "code",
+                                "execution_count": None,
+                                "metadata": {},
+                                "outputs": [],
+                                "source": [
+                                    line + "\n"
+                                    for line in notebook_source.splitlines()
+                                ],
+                            }
+                        ],
+                        "metadata": {
+                            "kernelspec": {
+                                "display_name": "Python 3",
+                                "language": "python",
+                                "name": "python3",
+                            }
+                        },
+                        "nbformat": 4,
+                        "nbformat_minor": 4,
                     }
 
-                    st.success("✅ Kaggle T4 deployment submitted.")
-                    st.info(
-                        "🔎 V3 ab deployment ko verify karega. Sirf 'queued/running' "
-                        "ko LIVE nahi maana jayega. Web UI tabhi show hoga jab public "
-                        "ngrok URL actual F5-TTS response dega."
+                    with open(
+                        "active_worker.ipynb",
+                        "w",
+                        encoding="utf-8",
+                    ) as f:
+                        json.dump(notebook_content, f, indent=2)
+
+                    metadata = {
+                        "id": (
+                            f"{kaggle_username.strip()}/"
+                            "f5-tts-custom-node-v2"
+                        ),
+                        "title": "F5 TTS Custom Node V2",
+                        "code_file": "active_worker.ipynb",
+                        "language": "python",
+                        "kernel_type": "notebook",
+                        "is_private": True,
+                        "enable_gpu": True,
+                        "enable_internet": True,
+                    }
+
+                    with open(
+                        "kernel-metadata.json",
+                        "w",
+                        encoding="utf-8",
+                    ) as f:
+                        json.dump(metadata, f, indent=2)
+
+                    result = subprocess.run(
+                        ["kaggle", "kernels", "push", "-p", "."],
+                        capture_output=True,
+                        text=True,
                     )
 
-            except Exception as exc:
-                st.error("System Error: " + repr(exc))
+                    if result.returncode != 0:
+                        st.error(
+                            "Kaggle deployment failed:\n\n"
+                            + (
+                                result.stderr
+                                if result.stderr
+                                else result.stdout
+                            )
+                        )
+                    else:
+                        kernel_id = (
+                            kaggle_username.strip()
+                            + "/f5-tts-custom-node-v2"
+                        )
+                        domain = ngrok_domain.strip()
 
-# ============================================================
+                        st.session_state["deployment"] = {
+                            "kernel_id": kernel_id,
+                            "domain": domain,
+                        }
+
+                        st.success("✅ Kaggle T4 deployment submitted.")
+                        st.info(
+                            "🔎 V3 ab deployment ko verify karega. Sirf 'queued/running' "
+                            "ko LIVE nahi maana jayega. Web UI tabhi show hoga jab public "
+                            "ngrok URL actual F5-TTS response dega."
+                        )
+
+                except Exception as exc:
+                    st.error("System Error: " + repr(exc))
+
+    # ============================================================
 # LIVE DEPLOYMENT MONITOR
 # ============================================================
 if "deployment" in st.session_state:
