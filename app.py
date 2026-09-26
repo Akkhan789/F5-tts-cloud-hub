@@ -77,6 +77,23 @@ def kaggle_status(kernel_id: str):
         return "UNKNOWN", repr(exc)
 
 
+
+
+def kaggle_logs(kernel_id: str):
+    """Fetch the current/latest Kaggle kernel runtime logs."""
+    try:
+        result = subprocess.run(
+            ["kaggle", "kernels", "logs", kernel_id],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        raw = (result.stdout or result.stderr or "").strip()
+        return raw
+    except Exception as exc:
+        return "LOG FETCH ERROR: " + repr(exc)
+
+
 def public_service_state(domain: str):
     """Probe the actual public URL; ERR_NGROK_8012 is not considered ready."""
     url = "https://" + domain.strip().rstrip("/") + "/"
@@ -621,3 +638,13 @@ if "deployment" in st.session_state:
 
         with st.expander("Kaggle status raw output"):
             st.code(raw_status or "No status output returned.")
+
+        # Current Kaggle CLI exposes kernel runtime logs separately from
+        # the status command. These logs are the decisive diagnostic source
+        # for install/import/model-loading failures.
+        with st.expander("🧾 Kaggle F5-TTS runtime logs", expanded=True):
+            logs = kaggle_logs(kernel_id)
+            if logs:
+                st.code(logs[-30000:])
+            else:
+                st.info("No runtime logs returned yet. Wait 30-60 seconds and check again.")
