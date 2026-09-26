@@ -1,7 +1,10 @@
 import json
 import os
 import subprocess
+import time
 import urllib.parse
+import urllib.request
+import urllib.error
 
 import streamlit as st
 
@@ -48,6 +51,56 @@ raw_msg = (
     "setup. Kindly assist me."
 )
 encoded_msg = urllib.parse.quote(raw_msg)
+
+
+def kaggle_status(kernel_id: str):
+    """Return Kaggle CLI status output and a normalized state."""
+    try:
+        result = subprocess.run(
+            ["kaggle", "kernels", "status", kernel_id],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        raw = (result.stdout or result.stderr or "").strip()
+        upper = raw.upper()
+        if "ERROR" in upper or "FAILED" in upper:
+            state = "FAILED"
+        elif "RUNNING" in upper or "QUEUED" in upper or "WAITING" in upper:
+            state = "RUNNING"
+        elif "COMPLETE" in upper or "SUCCESS" in upper:
+            state = "COMPLETE"
+        else:
+            state = "UNKNOWN"
+        return state, raw
+    except Exception as exc:
+        return "UNKNOWN", repr(exc)
+
+
+def public_service_state(domain: str):
+    """Probe the actual public URL; ERR_NGROK_8012 is not considered ready."""
+    url = "https://" + domain.strip().rstrip("/") + "/"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "F5-TTS-Deployment-Health-Check"},
+        )
+        with urllib.request.urlopen(req, timeout=12) as response:
+            status = response.status
+            body = response.read(5000).decode("utf-8", errors="ignore")
+        if 200 <= status < 500 and "ERR_NGROK_8012" not in body:
+            return True, f"HTTP {status}"
+        return False, f"HTTP {status} / upstream not ready"
+    except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read(5000).decode("utf-8", errors="ignore")
+        except Exception:
+            body = ""
+        if "ERR_NGROK_8012" in body:
+            return False, "ngrok agent reachable, upstream localhost:7860 refused"
+        return False, f"HTTP {exc.code}"
+    except Exception as exc:
+        return False, str(exc)
 
 
 if submit_btn:
@@ -509,39 +562,62 @@ while True:
                         )
                     )
                 else:
-                    st.success(
-                        "✅ Kaggle T4 node successfully queued/running."
-                    )
-
-                    st.warning(
-                        "⏳ F5-TTS pehle install hoga, phir model/app startup "
-                        "hogi. ERR_NGROK_8012 se bachne ke liye ngrok tabhi "
-                        "start hoga jab localhost:7860 actual HTTP response de."
-                    )
-
-                    st.markdown("### Deployment order")
-                    st.write(
-                        "1️⃣ F5-TTS install → "
-                        "2️⃣ GPU check → "
-                        "3️⃣ F5-TTS startup → "
-                        "4️⃣ HTTP 7860 health check → "
-                        "5️⃣ Ngrok → "
-                        "6️⃣ Web UI"
-                    )
-
-                    st.code(
-                        "Kaggle kernel: "
-                        + kaggle_username.strip()
+                    kernel_id = (
+                        kaggle_username.strip()
                         + "/f5-tts-custom-node-v2"
                     )
+                    domain = ngrok_domain.strip()
 
-                    st.markdown(
-                        f"### 🔗 Web UI: [Open F5-TTS](https://{ngrok_domain.strip()})"
-                    )
-                    st.caption(
-                        "Link ko tab open karein jab Kaggle notebook ke log mein "
-                        "'F5-TTS IS LIVE' aa jaye."
+                    st.session_state["deployment"] = {
+                        "kernel_id": kernel_id,
+                        "domain": domain,
+                    }
+
+                    st.success("✅ Kaggle T4 deployment submitted.")
+                    st.info(
+                        "🔎 V3 ab deployment ko verify karega. Sirf 'queued/running' "
+                        "ko LIVE nahi maana jayega. Web UI tabhi show hoga jab public "
+                        "ngrok URL actual F5-TTS response dega."
                     )
 
             except Exception as exc:
                 st.error("System Error: " + repr(exc))
+
+# ============================================================
+# LIVE DEPLOYMENT MONITOR
+# ============================================================
+if "deployment" in st.session_state:
+    dep = st.session_state["deployment"]
+    kernel_id = dep["kernel_id"]
+    domain = dep["domain"]
+
+    st.divider()
+    st.subheader("🔎 Live Deployment Monitor")
+    st.code("Kaggle kernel: " + kernel_id)
+
+    if st.button("🔄 Check F5-TTS Status", use_container_width=True):
+        with st.spinner("Kaggle status aur ngrok service check ho rahi hai..."):
+            state, raw_status = kaggle_status(kernel_id)
+            ready, public_detail = public_service_state(domain)
+
+        if state == "FAILED":
+            st.error("❌ Kaggle kernel FAILED")
+        elif ready:
+            st.success("🟢 F5-TTS Web UI is actually reachable.")
+            st.markdown(
+                f"### 🔗 [Open F5-TTS Web UI](https://{domain})"
+            )
+            st.caption("Public URL ne actual HTTP response diya hai; ERR_NGROK_8012 detect nahi hua.")
+        elif state == "RUNNING":
+            st.warning("🟡 Kaggle kernel RUNNING hai, lekin F5-TTS Web UI abhi ready nahi hai.")
+            st.write("Public check:", public_detail)
+            st.caption("Model download/initialization complete hone ka wait karein, phir 'Check F5-TTS Status' dobara press karein.")
+        elif state == "COMPLETE":
+            st.error("🔴 Kaggle run COMPLETE ho gaya lekin Web UI reachable nahi hai. Iska matlab F5-TTS startup likely fail/exit hua.")
+            st.write("Public check:", public_detail)
+        else:
+            st.warning("🟠 Kaggle status abhi clearly determine nahi hua.")
+            st.write("Public check:", public_detail)
+
+        with st.expander("Kaggle status raw output"):
+            st.code(raw_status or "No status output returned.")
