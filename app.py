@@ -1,65 +1,107 @@
-import streamlit as st
 import json
 import os
 import subprocess
 import urllib.parse
 
-st.set_page_config(page_title="Multi-User F5-TTS Core Hub", page_icon="🎛️", layout="centered")
+import streamlit as st
+
+st.set_page_config(
+    page_title="Multi-User F5-TTS Core Hub",
+    page_icon="🎛️",
+    layout="centered",
+)
 
 st.title("🎛️ Multi-User F5-TTS Cloud Hub")
-st.write("Apna Kaggle Token aur Ngrok Credentials dalein aur background mein free T4 GPU par F5-TTS node start karein.")
+st.write(
+    "Kaggle T4 par F5-TTS deploy karein. Ngrok tunnel sirf tab start hoga "
+    "jab F5-TTS ka HTTP service actually ready ho."
+)
 
 with st.form("user_node_form"):
     st.subheader("1. Kaggle Authentication")
-    kaggle_username = st.text_input("Kaggle Username", placeholder="e.g., ahmadkhan")
-    kaggle_key = st.text_input("Kaggle API Key", type="password", placeholder="Kaggle API token")
+    kaggle_username = st.text_input(
+        "Kaggle Username",
+        placeholder="e.g. your_kaggle_username",
+    )
+    kaggle_key = st.text_input(
+        "Kaggle API Key",
+        type="password",
+        placeholder="Kaggle API token",
+    )
 
-    st.subheader("2. Ngrok Multi-Tunnel Setup")
-    ngrok_auth = st.text_input("Ngrok Auth Token", type="password", placeholder="Ngrok auth token")
-    ngrok_domain = st.text_input("Ngrok Static Domain (Unique per user)", placeholder="e.g., your-unique-id.ngrok-free.app")
+    st.subheader("2. Ngrok Setup")
+    ngrok_auth = st.text_input(
+        "Ngrok Auth Token",
+        type="password",
+        placeholder="Ngrok auth token",
+    )
+    ngrok_domain = st.text_input(
+        "Ngrok Static Domain",
+        placeholder="e.g. your-name.ngrok-free.app",
+    )
+
     submit_btn = st.form_submit_button("🚀 Deploy My Personal T4 Node")
 
 whatsapp_num = "923097647772"
-raw_msg = "Hello M Yousaf! I need guidance regarding the F5-TTS Voice Cloning setup. Kindly assist me."
+raw_msg = (
+    "Hello M Yousaf! I need guidance regarding the F5-TTS Voice Cloning "
+    "setup. Kindly assist me."
+)
 encoded_msg = urllib.parse.quote(raw_msg)
 
+
 if submit_btn:
-    if not all([kaggle_username, kaggle_key, ngrok_auth, ngrok_domain]):
+    if not all(
+        [
+            kaggle_username.strip(),
+            kaggle_key.strip(),
+            ngrok_auth.strip(),
+            ngrok_domain.strip(),
+        ]
+    ):
         st.error("Meharbani karke saari fields fill karein!")
     else:
-        with st.spinner("Kaggle notebook prepare ho rahi hai aur T4 node deploy ho raha hai..."):
+        with st.spinner(
+            "Kaggle node deploy ho raha hai. F5-TTS install aur startup "
+            "complete hone ke baad hi service expose hogi..."
+        ):
             try:
-                os.environ["KAGGLE_USERNAME"] = kaggle_username
-                os.environ["KAGGLE_API_TOKEN"] = kaggle_key
+                os.environ["KAGGLE_USERNAME"] = kaggle_username.strip()
+                os.environ["KAGGLE_API_TOKEN"] = kaggle_key.strip()
 
-                # The wrapper deliberately imports F5-TTS only inside the Kaggle
-                # process. This prevents the Streamlit host from trying to import it.
-                wrapper_app_script = '''
-import time
+                # =========================================================
+                # F5-TTS WRAPPER
+                # =========================================================
+                # IMPORTANT:
+                # No separate F5-TTS import test is performed here.
+                # The wrapper itself performs the one real import/startup.
+                # This removes the old double-import/model-load problem.
+                # =========================================================
+                wrapper_app_script = r'''
 import traceback
 
-print("=" * 70)
-print("F5-TTS WRAPPER: IMPORT STAGE")
-print("=" * 70)
+print("=" * 80)
+print("F5-TTS NODE START")
+print("=" * 80)
 
 try:
     import gradio as gr
-    print("OK: Gradio imported")
-    print("Gradio version:", getattr(gr, "__version__", "unknown"))
 
-    print("Loading F5-TTS infer_gradio...")
+    print("GRADIO_VERSION =", getattr(gr, "__version__", "unknown"))
+    print("Loading official F5-TTS application...")
+
+    # Official F5-TTS documents this component usage.
     from f5_tts.infer.infer_gradio import app as f5_original_app
 
-    print("OK: F5-TTS infer_gradio imported")
-    print("OK: F5-TTS application object loaded")
+    print("F5_TTS_IMPORT_OK")
+    print("F5_TTS_APP_OBJECT_OK")
 
-except Exception as e:
-    print("=" * 70)
-    print("F5-TTS IMPORT / INITIALIZATION FAILED")
-    print("=" * 70)
-    print("ERROR:", repr(e))
+except Exception as exc:
+    print("=" * 80)
+    print("F5-TTS STARTUP FAILED")
+    print("ERROR:", repr(exc))
     traceback.print_exc()
-    print("=" * 70)
+    print("=" * 80)
     raise
 
 custom_css = """
@@ -74,208 +116,344 @@ body {
 """
 
 branding_html = """
-<div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:25px;border-radius:12px;color:white;text-align:center;margin-bottom:25px;box-shadow:0 4px 15px rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);">
-<h1 style="margin:0;font-size:28px;font-weight:700;color:white;">Welcome to Advanced F5-TTS Portal</h1>
-<p style="margin:5px 0 15px;font-size:16px;color:#e2e8f0;">Dynamic Multi-User Infrastructure Enabled</p>
-<hr style="border:0;border-top:1px solid rgba(255,255,255,.2);margin:10px 0;">
-<p style="margin:5px 0;font-weight:500;font-size:15px;color:#f7fafc;">🛠️ Build, Designed &amp; Optimized by <b>M Yousaf</b></p>
-<a href="https://wa.me/WHATSAPP_NUMBER?text=WHATSAPP_MESSAGE" target="_blank" style="display:inline-flex;align-items:center;background:#25D366;color:white;padding:10px 20px;border-radius:30px;text-decoration:none;font-weight:600;font-size:14px;margin-top:12px;">Get Professional Guide &amp; Support</a>
+<div style="
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 25px;
+    border-radius: 12px;
+    color: white;
+    text-align: center;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 15px rgba(0,0,0,.30);
+">
+    <h1 style="margin:0;font-size:28px;font-weight:700;color:white;">
+        Welcome to Advanced F5-TTS Portal
+    </h1>
+    <p style="margin:5px 0 15px;font-size:16px;color:#e2e8f0;">
+        Dynamic Multi-User Infrastructure Enabled
+    </p>
+    <hr style="border:0;border-top:1px solid rgba(255,255,255,.20);margin:10px 0;">
+    <p style="margin:5px 0;font-weight:500;font-size:15px;color:#f7fafc;">
+        🛠️ Build, Designed &amp; Optimized by <b>M Yousaf</b>
+    </p>
+    <a
+        href="https://wa.me/923097647772?text=Hello%20M%20Yousaf%21%20I%20need%20guidance%20regarding%20the%20F5-TTS%20Voice%20Cloning%20setup.%20Kindly%20assist%20me."
+        target="_blank"
+        style="display:inline-flex;align-items:center;background:#25D366;color:white;padding:10px 20px;border-radius:30px;text-decoration:none;font-weight:600;font-size:14px;margin-top:12px;"
+    >
+        Get Professional Guide &amp; Support
+    </a>
 </div>
 """
 
-branding_html = branding_html.replace("WHATSAPP_NUMBER", "923097647772").replace("WHATSAPP_MESSAGE", "Hello%20M%20Yousaf%21%20I%20need%20guidance%20regarding%20the%20F5-TTS%20Voice%20Cloning%20setup.%20Kindly%20assist%20me.")
+print("Building custom Gradio wrapper...")
 
-with gr.Blocks(css=custom_css, title="F5-TTS Voice Portal | M Yousaf") as master_demo:
+with gr.Blocks(
+    css=custom_css,
+    title="F5-TTS Voice Portal | M Yousaf",
+) as master_demo:
     gr.HTML(branding_html)
+
     with gr.Row():
-        file_title = gr.Textbox(label="💾 Set Output Audio Download Name (Optional)", placeholder="e.g., Cloned_Speech_Yousaf_Project")
+        gr.Textbox(
+            label="💾 Set Output Audio Download Name (Optional)",
+            placeholder="e.g. Cloned_Speech_Yousaf_Project",
+        )
+
     with gr.Row():
         f5_original_app.render()
 
-print("F5-TTS UI BUILD SUCCESS")
-print("Starting Gradio on 0.0.0.0:7860")
+print("F5-TTS UI BUILD OK")
+print("Launching HTTP service on 0.0.0.0:7860")
 
-master_demo.queue().launch(server_name="0.0.0.0", server_port=7860, show_error=True)
+master_demo.queue().launch(
+    server_name="0.0.0.0",
+    server_port=7860,
+    show_error=True,
+)
 '''
 
+                # =========================================================
+                # KAGGLE NOTEBOOK
+                # =========================================================
                 notebook_source = r'''
 import os
 import sys
 import time
 import socket
 import subprocess
-
-print("=" * 70)
-print("F5-TTS KAGGLE NODE BOOT")
-print("=" * 70)
+import urllib.request
 
 NGROK_TOKEN = __NGROK_TOKEN__
 NGROK_DOMAIN = __NGROK_DOMAIN__
+WRAPPER_CODE = __WRAPPER_CODE__
 
-# ------------------------------------------------------------
-# Clean only the target service port.
-# ------------------------------------------------------------
-subprocess.run("fuser -k 7860/tcp || true", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+print("=" * 80)
+print("KAGGLE F5-TTS NODE BOOT")
+print("=" * 80)
 
-# ------------------------------------------------------------
-# STAGE 1 - INSTALL
-# ------------------------------------------------------------
-print("\n" + "=" * 70)
-print("STAGE 1: INSTALLING F5-TTS + PYNGROK")
-print("=" * 70)
+# ============================================================
+# 1. CLEAN ONLY PORT 7860
+# ============================================================
+print("Cleaning port 7860...")
+subprocess.run(
+    "fuser -k 7860/tcp || true",
+    shell=True,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
 
-install_result = subprocess.run(
-    [sys.executable, "-m", "pip", "install", "-U", "f5-tts", "pyngrok"],
+# ============================================================
+# 2. INSTALL
+# ============================================================
+# Pin the currently published F5-TTS release so a future package
+# update cannot silently change the environment.
+F5_VERSION = "1.1.22"
+
+print("=" * 80)
+print("INSTALLING F5-TTS", F5_VERSION)
+print("=" * 80)
+
+install = subprocess.run(
+    [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--upgrade",
+        "--no-cache-dir",
+        f"f5-tts=={F5_VERSION}",
+        "gradio>=6.15.0",
+        "pyngrok",
+    ],
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
     text=True,
 )
-print(install_result.stdout[-25000:])
-if install_result.returncode != 0:
+
+print(install.stdout[-30000:])
+
+if install.returncode != 0:
     raise RuntimeError("F5-TTS PIP INSTALL FAILED")
-print("STAGE 1 PASSED")
 
-# ------------------------------------------------------------
-# STAGE 2 - PYTORCH / CUDA
-# ------------------------------------------------------------
-print("\n" + "=" * 70)
-print("STAGE 2: PYTORCH / CUDA CHECK")
-print("=" * 70)
+print("F5-TTS INSTALL OK")
 
-cuda_result = subprocess.run(
-    [sys.executable, "-c", "import torch; print('TORCH_VERSION:', torch.__version__); print('CUDA_AVAILABLE:', torch.cuda.is_available()); print('TORCH_CUDA_VERSION:', torch.version.cuda); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE')"],
+# ============================================================
+# 3. GPU CHECK
+# ============================================================
+print("=" * 80)
+print("PYTORCH / GPU CHECK")
+print("=" * 80)
+
+gpu_check = subprocess.run(
+    [
+        sys.executable,
+        "-c",
+        (
+            "import torch; "
+            "print('TORCH=', torch.__version__); "
+            "print('CUDA_AVAILABLE=', torch.cuda.is_available()); "
+            "print('CUDA_VERSION=', torch.version.cuda); "
+            "print('GPU=', torch.cuda.get_device_name(0) "
+            "if torch.cuda.is_available() else 'NONE')"
+        ),
+    ],
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
     text=True,
 )
-print(cuda_result.stdout)
-if cuda_result.returncode != 0:
-    raise RuntimeError("PYTORCH/CUDA CHECK FAILED")
-print("STAGE 2 PASSED")
 
-# ------------------------------------------------------------
-# STAGE 3 - F5-TTS IMPORT TEST
-# ------------------------------------------------------------
-print("\n" + "=" * 70)
-print("STAGE 3: F5-TTS IMPORT + MODEL INITIALIZATION TEST")
-print("=" * 70)
+print(gpu_check.stdout)
 
-import_test_code = r"""
-import f5_tts
-print("f5_tts import: OK")
-print("f5_tts version:", getattr(f5_tts, "__version__", "unknown"))
-print("Loading f5_tts.infer.infer_gradio...")
-from f5_tts.infer.infer_gradio import app
-print("F5_TTS_INFER_GRADIO_IMPORT_OK")
-"""
+if gpu_check.returncode != 0:
+    raise RuntimeError("PYTORCH/GPU CHECK FAILED")
 
-import_result = subprocess.run([sys.executable, "-c", import_test_code], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-print(import_result.stdout[-35000:])
-if import_result.returncode != 0:
-    print("F5-TTS IMPORT FAILED - NGROK WILL NOT BE STARTED")
-    raise RuntimeError("F5-TTS IMPORT TEST FAILED")
-print("STAGE 3 PASSED")
+# ============================================================
+# 4. WRITE WRAPPER
+# ============================================================
+with open(
+    "master_wrapper_launcher.py",
+    "w",
+    encoding="utf-8",
+) as f:
+    f.write(WRAPPER_CODE)
 
-# ------------------------------------------------------------
-# Create wrapper
-# ------------------------------------------------------------
-wrapper_code = __WRAPPER_CODE__
-with open("master_wrapper_launcher.py", "w", encoding="utf-8") as f:
-    f.write(wrapper_code)
-print("Wrapper file created successfully")
+print("Wrapper file created")
 
-# ------------------------------------------------------------
-# STAGE 4 - START SERVER
-# ------------------------------------------------------------
-print("\n" + "=" * 70)
-print("STAGE 4: STARTING F5-TTS SERVER")
-print("=" * 70)
+# ============================================================
+# 5. START F5-TTS
+# ============================================================
+print("=" * 80)
+print("STARTING F5-TTS")
+print("=" * 80)
 
-log_file = open("f5tts_server.log", "w", buffering=1)
-server_process = subprocess.Popen([sys.executable, "master_wrapper_launcher.py"], stdout=log_file, stderr=subprocess.STDOUT, text=True)
-print("F5-TTS PID:", server_process.pid)
+log_file = open(
+    "f5tts_server.log",
+    "w",
+    buffering=1,
+)
 
-# ------------------------------------------------------------
-# Wait until IPv4 127.0.0.1:7860 is really listening.
-# ------------------------------------------------------------
-print("Waiting for localhost:7860...")
-server_ready = False
+server = subprocess.Popen(
+    [sys.executable, "master_wrapper_launcher.py"],
+    stdout=log_file,
+    stderr=subprocess.STDOUT,
+    text=True,
+)
 
-for attempt in range(180):
-    time.sleep(2)
+print("F5-TTS PID =", server.pid)
 
-    if server_process.poll() is not None:
+# ============================================================
+# 6. WAIT FOR REAL HTTP SERVICE
+# ============================================================
+# TCP port alone is not enough. We require an actual HTTP response
+# before starting ngrok. This directly prevents ERR_NGROK_8012.
+print("=" * 80)
+print("WAITING FOR F5-TTS HTTP SERVICE")
+print("=" * 80)
+
+ready = False
+
+for second in range(1, 601):
+    time.sleep(1)
+
+    if server.poll() is not None:
         log_file.flush()
-        print("\n" + "=" * 70)
-        print("F5-TTS SERVER PROCESS DIED")
-        print("=" * 70)
-        try:
-            with open("f5tts_server.log", "r", encoding="utf-8", errors="ignore") as f:
-                print(f.read()[-35000:])
-        except Exception as log_error:
-            print("Could not read server log:", log_error)
-        raise RuntimeError("F5-TTS SERVER CRASHED BEFORE PORT 7860 OPENED")
+        print("=" * 80)
+        print("F5-TTS PROCESS EXITED")
+        print("=" * 80)
 
+        try:
+            with open(
+                "f5tts_server.log",
+                "r",
+                encoding="utf-8",
+                errors="ignore",
+            ) as f:
+                print(f.read()[-50000:])
+        except Exception as exc:
+            print("Could not read F5-TTS log:", repr(exc))
+
+        raise RuntimeError(
+            "F5-TTS STOPPED BEFORE BECOMING READY"
+        )
+
+    # First check that something is listening.
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(1)
+    tcp_ok = False
+
     try:
         sock.connect(("127.0.0.1", 7860))
-        sock.close()
-        server_ready = True
-        print("\n" + "=" * 70)
-        print("F5-TTS PORT 7860 IS READY")
-        print("=" * 70)
-        break
-    except Exception:
-        sock.close()
-
-    if attempt % 5 == 0:
-        print("Still waiting... " + str(attempt * 2) + " seconds")
-
-if not server_ready:
-    log_file.flush()
-    print("F5-TTS PORT 7860 TIMEOUT")
-    try:
-        with open("f5tts_server.log", "r", encoding="utf-8", errors="ignore") as f:
-            print(f.read()[-35000:])
+        tcp_ok = True
     except Exception:
         pass
-    raise RuntimeError("F5-TTS DID NOT OPEN PORT 7860 WITHIN 360 SECONDS")
+    finally:
+        sock.close()
 
-# ------------------------------------------------------------
-# STAGE 5 - NGROK ONLY AFTER 7860 IS READY
-# ------------------------------------------------------------
-print("\n" + "=" * 70)
-print("STAGE 5: STARTING NGROK")
-print("=" * 70)
+    if not tcp_ok:
+        if second % 15 == 0:
+            print("F5-TTS still starting:", second, "seconds")
+        continue
+
+    # Then require an HTTP response.
+    try:
+        request = urllib.request.Request(
+            "http://127.0.0.1:7860/",
+            headers={"User-Agent": "F5-TTS-health-check"},
+        )
+
+        with urllib.request.urlopen(request, timeout=5) as response:
+            status = response.status
+
+        if 200 <= status < 500:
+            ready = True
+            print("=" * 80)
+            print("F5-TTS HTTP SERVICE READY - STATUS", status)
+            print("=" * 80)
+            break
+
+    except Exception:
+        pass
+
+    if second % 15 == 0:
+        print(
+            "Port is open but HTTP service is not ready yet:",
+            second,
+            "seconds",
+        )
+
+if not ready:
+    log_file.flush()
+    print("=" * 80)
+    print("F5-TTS HTTP STARTUP TIMEOUT")
+    print("=" * 80)
+
+    try:
+        with open(
+            "f5tts_server.log",
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+        ) as f:
+            print(f.read()[-50000:])
+    except Exception:
+        pass
+
+    raise RuntimeError(
+        "F5-TTS DID NOT BECOME HTTP-READY WITHIN 600 SECONDS"
+    )
+
+# ============================================================
+# 7. ONLY AFTER HTTP READY: NGROK
+# ============================================================
+print("=" * 80)
+print("STARTING NGROK")
+print("=" * 80)
 
 from pyngrok import ngrok
+
 ngrok.set_auth_token(NGROK_TOKEN)
+
 try:
     ngrok.kill()
 except Exception:
     pass
 
-public_url = ngrok.connect(addr="127.0.0.1:7860", proto="http", name="f5_node", hostname=NGROK_DOMAIN)
-print("F5-TTS DEPLOYMENT ACTIVE")
-print("PUBLIC URL:", public_url)
+public_url = ngrok.connect(
+    addr="127.0.0.1:7860",
+    proto="http",
+    name="f5_node",
+    hostname=NGROK_DOMAIN,
+)
+
+print("=" * 80)
+print("F5-TTS IS LIVE")
+print("PUBLIC URL =", public_url)
+print("=" * 80)
 
 while True:
     time.sleep(60)
 '''
 
-                notebook_source = notebook_source.replace("__NGROK_TOKEN__", repr(ngrok_auth))
-                notebook_source = notebook_source.replace("__NGROK_DOMAIN__", repr(ngrok_domain))
-                notebook_source = notebook_source.replace("__WRAPPER_CODE__", repr(wrapper_app_script))
+                notebook_source = (
+                    notebook_source
+                    .replace("__NGROK_TOKEN__", repr(ngrok_auth.strip()))
+                    .replace("__NGROK_DOMAIN__", repr(ngrok_domain.strip()))
+                    .replace("__WRAPPER_CODE__", repr(wrapper_app_script))
+                )
 
                 notebook_content = {
-                    "cells": [{
-                        "cell_type": "code",
-                        "execution_count": None,
-                        "metadata": {},
-                        "outputs": [],
-                        "source": [line + "\n" for line in notebook_source.splitlines()],
-                    }],
+                    "cells": [
+                        {
+                            "cell_type": "code",
+                            "execution_count": None,
+                            "metadata": {},
+                            "outputs": [],
+                            "source": [
+                                line + "\n"
+                                for line in notebook_source.splitlines()
+                            ],
+                        }
+                    ],
                     "metadata": {
                         "kernelspec": {
                             "display_name": "Python 3",
@@ -287,11 +465,18 @@ while True:
                     "nbformat_minor": 4,
                 }
 
-                with open("active_worker.ipynb", "w", encoding="utf-8") as f:
+                with open(
+                    "active_worker.ipynb",
+                    "w",
+                    encoding="utf-8",
+                ) as f:
                     json.dump(notebook_content, f, indent=2)
 
                 metadata = {
-                    "id": f"{kaggle_username}/f5-tts-custom-node-v2",
+                    "id": (
+                        f"{kaggle_username.strip()}/"
+                        "f5-tts-custom-node-v2"
+                    ),
                     "title": "F5 TTS Custom Node V2",
                     "code_file": "active_worker.ipynb",
                     "language": "python",
@@ -301,7 +486,11 @@ while True:
                     "enable_internet": True,
                 }
 
-                with open("kernel-metadata.json", "w", encoding="utf-8") as f:
+                with open(
+                    "kernel-metadata.json",
+                    "w",
+                    encoding="utf-8",
+                ) as f:
                     json.dump(metadata, f, indent=2)
 
                 result = subprocess.run(
@@ -310,16 +499,49 @@ while True:
                     text=True,
                 )
 
-                if result.returncode == 0:
-                    st.success("🎉 Personal T4 Node deployment start ho gayi!")
-                    st.info(
-                        "F5-TTS pehle install + CUDA check + import/model initialization complete karega. "
-                        "Ngrok sirf tab start hoga jab localhost:7860 actually ready hoga."
+                if result.returncode != 0:
+                    st.error(
+                        "Kaggle deployment failed:\n\n"
+                        + (
+                            result.stderr
+                            if result.stderr
+                            else result.stdout
+                        )
                     )
-                    st.markdown(f"### 🔗 [Open Your F5-TTS Web UI](https://{ngrok_domain})")
-                    st.caption("Agar page immediately open na ho to F5-TTS startup complete hone ka wait karein.")
                 else:
-                    st.error("Kaggle CLI Error:\n\n" + (result.stderr if result.stderr else result.stdout))
+                    st.success(
+                        "✅ Kaggle T4 node successfully queued/running."
+                    )
 
-            except Exception as e:
-                st.error(f"System Error: {str(e)}")
+                    st.warning(
+                        "⏳ F5-TTS pehle install hoga, phir model/app startup "
+                        "hogi. ERR_NGROK_8012 se bachne ke liye ngrok tabhi "
+                        "start hoga jab localhost:7860 actual HTTP response de."
+                    )
+
+                    st.markdown("### Deployment order")
+                    st.write(
+                        "1️⃣ F5-TTS install → "
+                        "2️⃣ GPU check → "
+                        "3️⃣ F5-TTS startup → "
+                        "4️⃣ HTTP 7860 health check → "
+                        "5️⃣ Ngrok → "
+                        "6️⃣ Web UI"
+                    )
+
+                    st.code(
+                        "Kaggle kernel: "
+                        + kaggle_username.strip()
+                        + "/f5-tts-custom-node-v2"
+                    )
+
+                    st.markdown(
+                        f"### 🔗 Web UI: [Open F5-TTS](https://{ngrok_domain.strip()})"
+                    )
+                    st.caption(
+                        "Link ko tab open karein jab Kaggle notebook ke log mein "
+                        "'F5-TTS IS LIVE' aa jaye."
+                    )
+
+            except Exception as exc:
+                st.error("System Error: " + repr(exc))
